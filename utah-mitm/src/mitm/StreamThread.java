@@ -24,11 +24,11 @@ public class StreamThread implements Runnable
   // We really ought to take a stream oriented approach.
   private final static int BUFFER_SIZE = 65536;
 
-  private final ConnectionDetails m_connectionDetails;
-  private final InputStream m_in;
-  private final OutputStream m_out;
-  private final ProxyDataFilter m_filter;
-  private final PrintWriter m_outputWriter;
+  private ConnectionDetails m_connectionDetails;
+  private InputStream m_in;
+  private OutputStream m_out;
+  private ProxyDataFilter m_filter;
+  private PrintWriter m_outputWriter;
 
   public StreamThread(ConnectionDetails connectionDetails, InputStream in,
       OutputStream out, ProxyDataFilter filter, PrintWriter outputWriter)
@@ -52,6 +52,28 @@ public class StreamThread implements Runnable
     }
 
     t.start();
+  }
+  
+  public void changeInputStream(InputStream in)
+  {
+    try 
+    { 
+      m_in.close(); 
+    }
+    catch (Exception e) {}
+    
+    m_in = in;
+  }
+  
+  public void changeOutputStream(OutputStream out)
+  {
+    try 
+    { 
+      m_out.close(); 
+    }
+    catch (Exception e) {}
+    
+    m_out = out;
   }
 
   public void run()

@@ -2,30 +2,34 @@ package mitm;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class PlainProxyEngine extends AbstractProxyEngine
+public class ProxyEngine implements Runnable
 {
+  private String m_localHost;
+  private int m_localPort;
+  private PrintWriter m_outputWriter;
+  private PlainSocketFactory m_plainSocketFactory;
+  private ServerSocket m_serverSocket;
+  
   private final Pattern m_httpConnectPattern;
 
-  public PlainProxyEngine(
-      ISocketFactory socketFactory,
-      ProxyDataFilter requestFilter, 
-      ProxyDataFilter responseFilter, 
+  public ProxyEngine(
       String localHost,
       int localPort,
       int timeout) throws IOException
   {
-    super(
-        socketFactory, 
-        requestFilter, 
-        responseFilter, 
-        new ConnectionDetails(localHost, localPort, "", -1, false), 
-        timeout);
-    
-    m_httpConnectPattern =  Pattern.compile("^([A-Z]+)[ \\t]+http://([^/:]+):?(\\d*)/.*\r\n\r\n", Pattern.DOTALL);
+    m_localHost = localHost;
+    m_localPort = localPort;
+    m_outputWriter = new PrintWriter(System.out, true);
+    m_plainSocketFactory = new PlainSocketFactory();
+    m_httpConnectPattern = Pattern.compile("^([A-Z]+)[ \\t]+http://([^/:]+):?(\\d*)/.*\r\n\r\n", Pattern.DOTALL);
+
+    m_serverSocket = m_plainSocketFactory.createServerSocket(m_localHost, m_localPort, timeout);    
   }
 
   @Override
@@ -37,9 +41,9 @@ public class PlainProxyEngine extends AbstractProxyEngine
     {
       try
       {
-        final Socket localSocket = getServerSocket().accept();
+        final Socket localSocket = m_serverSocket.accept();
   
-        System.out.println("[PlainProxyEngine] New proxy proxy connection");
+        System.out.println("[PlainProxyEngine] New proxy connection");
         
         final BufferedInputStream in =
             new BufferedInputStream(localSocket.getInputStream(), buffer.length);
@@ -67,18 +71,21 @@ public class PlainProxyEngine extends AbstractProxyEngine
             // remotePort = 80;
           }
           
-          Socket remoteSocket = getSocketFactory().createClientSocket(remoteHost, remotePort);
+          Socket remoteSocket = m_plainSocketFactory.createClientSocket(remoteHost, remotePort);
           
-          // Forward client request to server
-          remoteSocket.getOutputStream().write(buffer, 0, bytesRead);
-    
-          this.launchThreadPair(
+          byte[] connectMessage = new byte[bytesRead];
+          System.arraycopy(buffer, 0, connectMessage, 0, bytesRead);
+          
+          // Delegate work to a new manager for the current connection
+          new ConnectionManager(
               localSocket, 
-              remoteSocket,
-              remoteHost);
+              remoteSocket, 
+              new ConnectionDetails(m_localHost, m_localPort, remoteHost, remotePort, false), 
+              connectMessage,
+              m_outputWriter);
         }
       }
-      catch (IOException e)
+      catch (Exception e)
       {
         e.printStackTrace(System.err);
       }
