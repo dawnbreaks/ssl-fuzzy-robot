@@ -21,7 +21,7 @@ public class ProxyDataFilter
 {
   public interface OnRedirectInterceptListener
   {
-    public void onRedirectIntercepted();
+    public void onRedirectIntercepted(String uri);
   }
   
   private PrintWriter m_out = new PrintWriter(System.out, true);
@@ -33,7 +33,7 @@ public class ProxyDataFilter
   {
     // This don't feel like a completely correct way to match domains.. oh well.
     m_serverRedirectPattern = Pattern.compile(
-        "^.*HTTP.* (30\\d [^\r]*).*https://([^/:]+).*\r\n\r\n", Pattern.DOTALL);
+        "^.*HTTP.* (30\\d [^\r]*).*(https://[^\r]+).*\r\n\r\n", Pattern.DOTALL);
     
     m_httpsPattern = Pattern.compile("^(.*)https://(.*)", Pattern.DOTALL);
   }
@@ -108,7 +108,7 @@ public class ProxyDataFilter
       
       if (m_redirectListener != null)
       {
-        m_redirectListener.onRedirectIntercepted();
+        m_redirectListener.onRedirectIntercepted(redirectMatcher.group(2));
       }
 
       // Avoid closing the client connection by returning a non-null byte array.

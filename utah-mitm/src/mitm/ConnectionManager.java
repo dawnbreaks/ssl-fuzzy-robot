@@ -49,7 +49,7 @@ public class ConnectionManager
     m_responseFilter.setOnRedirectInterceptListener(new OnRedirectInterceptListener()
     {
       @Override
-      public void onRedirectIntercepted()
+      public void onRedirectIntercepted(String uri)
       {
         try
         {
@@ -60,7 +60,7 @@ public class ConnectionManager
         
         try
         {
-          byte[] ddd = upgradeHeader(m_lastMessage);
+          byte[] ddd = upgradeHeader(m_lastMessage, uri);
           
           // Promote our outgoing stream to SSL
           m_remoteSocket = m_halfSSLsocketFactory.createClientSocket(m_connectionDetails.getRemoteHost(), 443);
@@ -100,10 +100,11 @@ public class ConnectionManager
     return data.getBytes("US-ASCII");
   }
   
-  private byte[] upgradeHeader(byte[] request) throws Exception
+  private byte[] upgradeHeader(byte[] request, String uri) throws Exception
   {
     String data = new String(request, "US-ASCII");
-    data = data.replace("http", "https");
+    data = data.replaceFirst("http[^ ]+", uri);
+        
     return data.getBytes("US-ASCII");
   }
   
