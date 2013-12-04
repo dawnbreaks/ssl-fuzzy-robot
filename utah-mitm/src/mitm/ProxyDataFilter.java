@@ -117,7 +117,7 @@ public class ProxyDataFilter
     else if (httpsMatcher.find())
     {
 // FIXME: It seems like this isn't matching because data is gzipped? or encrypted??
-      String stripped = dataAsString.replace("https", "http");
+      String stripped = dataAsString.replace("https", " http");
       return stripped.getBytes("US-ASCII");
     }
     else

@@ -2,7 +2,10 @@ package mitm;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.io.UnsupportedEncodingException;
 import java.net.Socket;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import mitm.ProxyDataFilter.OnRedirectInterceptListener;
 
@@ -57,9 +60,11 @@ public class ConnectionManager
         
         try
         {
+          byte[] ddd = upgradeHeader(m_lastMessage);
+          
           // Promote our outgoing stream to SSL
           m_remoteSocket = m_halfSSLsocketFactory.createClientSocket(m_connectionDetails.getRemoteHost(), 443);
-          m_remoteSocket.getOutputStream().write(m_lastMessage, 0, m_lastMessage.length);
+          m_remoteSocket.getOutputStream().write(ddd, 0, ddd.length);
           m_clientServerStream.changeOutputStream(m_remoteSocket.getOutputStream());
           m_serverClientStream.changeInputStream(m_remoteSocket.getInputStream());
         }
@@ -70,10 +75,36 @@ public class ConnectionManager
       }
     });
 
+    m_lastMessage = stripEncoding(m_lastMessage);
+    
     // Forward client request to server
     m_remoteSocket.getOutputStream().write(m_lastMessage, 0, m_lastMessage.length);
 
     launchThreadPair();
+  }
+  
+  private byte[] stripEncoding(byte[] request) throws Exception
+  {
+    String data = new String(request, "US-ASCII");
+    
+    Pattern p = Pattern.compile("(.*)Accept-Encoding: [,a-zA-Z]+\r\n(.*)", Pattern.DOTALL);
+    Matcher m = p.matcher(data);
+    
+    if (m.find())
+    {
+      data = m.group(1) + m.group(2);
+    }
+
+    System.err.println(data);
+    
+    return data.getBytes("US-ASCII");
+  }
+  
+  private byte[] upgradeHeader(byte[] request) throws Exception
+  {
+    String data = new String(request, "US-ASCII");
+    data = data.replace("http", "https");
+    return data.getBytes("US-ASCII");
   }
   
   /*
