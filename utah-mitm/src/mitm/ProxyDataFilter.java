@@ -25,12 +25,15 @@ public class ProxyDataFilter
   }
   
   private PrintWriter m_out = new PrintWriter(System.out, true);
+  private Pattern m_httpHeaderPattern;
   private Pattern m_serverRedirectPattern;
   private Pattern m_httpsPattern;
   private OnRedirectInterceptListener m_redirectListener;
 
   public ProxyDataFilter()
   {
+    m_httpHeaderPattern = Pattern.compile("^([A-Z])+.*\r\n\r\n", Pattern.DOTALL);
+    
     // This don't feel like a completely correct way to match domains.. oh well.
     m_serverRedirectPattern = Pattern.compile(
         "^.*HTTP.* (30\\d [^\r]*).*(https://[^\r]+).*\r\n\r\n", Pattern.DOTALL);
@@ -56,6 +59,46 @@ public class ProxyDataFilter
 
   public byte[] handle(ConnectionDetails connectionDetails, byte[] buffer, int bytesRead) throws java.io.IOException
   {
+    String dataAsString = extractData(buffer, bytesRead);
+    Matcher httpHeaderMatcher = m_httpHeaderPattern.matcher(dataAsString);
+    Matcher redirectMatcher = m_serverRedirectPattern.matcher(dataAsString);
+    Matcher httpsMatcher = m_httpsPattern.matcher(dataAsString);
+
+    // Note: We really should bulk up entire HTTP messages before attempting to do match,
+    // but this will probably work most of the time...
+    if (httpHeaderMatcher.find())
+    {
+      System.err.println("------ " + connectionDetails.getDescription() + " ------");
+      m_out.println(httpHeaderMatcher.group());
+    }
+    
+    if (redirectMatcher.find())
+    {
+      // Intercept redirects
+      System.err.println("-- Intecepted redirect: "
+          + redirectMatcher.group(1) + " for " + redirectMatcher.group(2));
+      
+      if (m_redirectListener != null)
+      {
+        m_redirectListener.onRedirectIntercepted(redirectMatcher.group(2));
+      }
+
+      // Avoid closing the client connection by returning a non-null byte array.
+      return new byte[0];
+    }
+    else if (httpsMatcher.find())
+    {
+      // Down-grade links
+      String stripped = dataAsString.replace("https", " http");
+      return stripped.getBytes("US-ASCII");
+    }
+    
+    return null;
+  }
+  
+  // Old code to print data in hex/ascci
+  private String extractData(byte[] buffer, int bytesRead)
+  {
     final StringBuffer stringBuffer = new StringBuffer();
 
     boolean inHex = false;
@@ -68,7 +111,6 @@ public class ProxyDataFilter
       if (value == '\r' || value == '\n'
           || (value >= ' ' && value <= '~'))
       {
-
         if (inHex)
         {
           stringBuffer.append(']');
@@ -94,50 +136,18 @@ public class ProxyDataFilter
       }
     }
     
-    // Look for a redirect in the data
-    String dataAsString = stringBuffer.toString();
-    Matcher redirectMatcher = m_serverRedirectPattern.matcher(dataAsString);
-    Matcher httpsMatcher = m_httpsPattern.matcher(dataAsString);
-    
-    // Note: We really should bulk up entire HTTP messages before attempting to do match,
-    // but this will probably work most of the time...
-    if (redirectMatcher.find())
-    {
-      m_out.println("-- Intecepted redirect: "
-          + redirectMatcher.group(1) + " for " + redirectMatcher.group(2));
-      
-      if (m_redirectListener != null)
-      {
-        m_redirectListener.onRedirectIntercepted(redirectMatcher.group(2));
-      }
-
-      // Avoid closing the client connection by returning a non-null byte array.
-      return new byte[0];
-    }
-    else if (httpsMatcher.find())
-    {
-// FIXME: It seems like this isn't matching because data is gzipped? or encrypted??
-      String stripped = dataAsString.replace("https", " http");
-      return stripped.getBytes("US-ASCII");
-    }
-    else
-    {
-      m_out.println("------ " + connectionDetails.getDescription()
-          + " ------");
-      m_out.println(stringBuffer);
-      return null;
-    }
+    return stringBuffer.toString();
   }
 
   public void connectionOpened(ConnectionDetails connectionDetails)
   {
-    m_out.println("--- " + connectionDetails.getDescription()
+    System.err.println("--- " + connectionDetails.getDescription()
         + " opened --");
   }
 
   public void connectionClosed(ConnectionDetails connectionDetails)
   {
-    m_out.println("--- " + connectionDetails.getDescription()
+    System.err.println("--- " + connectionDetails.getDescription()
         + " closed --");
   }
 }

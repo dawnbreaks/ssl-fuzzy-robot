@@ -95,7 +95,8 @@ public class ConnectionManager
       data = m.group(1) + m.group(2);
     }
 
-    System.err.println(data);
+    System.err.println("-- stripped \"Accept Encoding\"");
+    System.out.println(data);
     
     return data.getBytes("US-ASCII");
   }
@@ -104,7 +105,10 @@ public class ConnectionManager
   {
     String data = new String(request, "US-ASCII");
     data = data.replaceFirst("http[^ ]+", uri);
-        
+    
+    System.err.println("-- upgraded request to https");
+    System.out.println(data);
+    
     return data.getBytes("US-ASCII");
   }
   

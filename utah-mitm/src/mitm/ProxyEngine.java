@@ -43,7 +43,7 @@ public class ProxyEngine implements Runnable
       {
         final Socket localSocket = m_serverSocket.accept();
   
-        System.out.println("[PlainProxyEngine] New proxy connection");
+        System.err.println("--- [PlainProxyEngine] New proxy connection");
         
         final BufferedInputStream in =
             new BufferedInputStream(localSocket.getInputStream(), buffer.length);
