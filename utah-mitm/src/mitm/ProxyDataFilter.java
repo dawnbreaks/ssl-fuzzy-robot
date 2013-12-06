@@ -57,9 +57,13 @@ public class ProxyDataFilter
     m_redirectListener = l;
   }
 
-  public byte[] handle(ConnectionDetails connectionDetails, byte[] buffer, int bytesRead) throws java.io.IOException
+  public byte[] handle(ConnectionDetails connectionDetails, byte[] data) throws Exception
   {
-    String dataAsString = extractData(buffer, bytesRead);
+    //buffer = Strippers.removeAcceptEncoding(buffer);
+    //bytesRead = buffer.length;
+    
+    
+    String dataAsString = new String(data, "UTF-8");
     Matcher httpHeaderMatcher = m_httpHeaderPattern.matcher(dataAsString);
     Matcher redirectMatcher = m_serverRedirectPattern.matcher(dataAsString);
     Matcher httpsMatcher = m_httpsPattern.matcher(dataAsString);
@@ -90,7 +94,7 @@ public class ProxyDataFilter
     {
       // Down-grade links
       String stripped = dataAsString.replace("https", " http");
-      return stripped.getBytes("US-ASCII");
+      return stripped.getBytes("UTF-8");
     }
     
     return null;

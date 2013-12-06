@@ -60,13 +60,15 @@ public class ConnectionManager
         
         try
         {
-          byte[] ddd = modifyHeaderFromRedirect(m_lastMessage, msg);
+          byte[] ddd = modifyHeaderFromRedirect(m_lastMessage, msg);       
+          
+          System.out.println(new String(ddd, "UTF-8"));
           
           // Promote our outgoing stream to SSL
           m_remoteSocket = m_halfSSLsocketFactory.createClientSocket(m_connectionDetails.getRemoteHost(), 443);
           m_remoteSocket.getOutputStream().write(ddd, 0, ddd.length);
           m_clientServerStream.changeOutputStream(m_remoteSocket.getOutputStream());
-          m_serverClientStream.changeInputStream(m_remoteSocket.getInputStream());
+          m_serverClientStream.changeInputStream(m_remoteSocket.getInputStream());         
         }
         catch (Exception e) 
         {
@@ -74,80 +76,58 @@ public class ConnectionManager
         }
       }
     });
-
-    m_lastMessage = stripEncoding(m_lastMessage);
+    
+    String request = new String(m_lastMessage, "UTF-8");
+    request = Strippers.removeAcceptEncoding(request);
+    request = Strippers.removeCookie(request);
+    m_lastMessage = request.getBytes("UTF-8");
+    
+    System.out.println(request);
     
     // Forward client request to server
     m_remoteSocket.getOutputStream().write(m_lastMessage, 0, m_lastMessage.length);
 
     launchThreadPair();
   }
-  
-  private byte[] stripEncoding(byte[] request) throws Exception
+    
+  private byte[] modifyHeaderFromRedirect(byte[] requestAsBytes, String response) throws Exception
   {
-    String data = new String(request, "US-ASCII");
-    
-    Pattern p = Pattern.compile("(.*)Accept-Encoding: [,a-zA-Z]+\r\n(.*)", Pattern.DOTALL);
-    Matcher m = p.matcher(data);
-    
-    if (m.find())
-    {
-      data = m.group(1) + m.group(2);
-    }
+    String request = new String(requestAsBytes, "UTF-8");
 
-    System.err.println("-- stripped \"Accept Encoding\"");
-    System.out.println(data);
-    
-    return data.getBytes("US-ASCII");
+    request = setRedirectUri(request, response);
+    request = setCookie(request, response);
+    request = Strippers.removeAcceptEncoding(request);
+
+    return request.getBytes("UTF-8");
   }
   
-  private byte[] modifyHeaderFromRedirect(byte[] request, String response) throws Exception
+  private String setCookie(String request, String response) throws Exception
   {
-    String requestAsString = new String(request, "US-ASCII");
-
-    requestAsString = upgradeToHttps(requestAsString, response);
-    requestAsString = setCookie(requestAsString, response);
-    
-    
-    System.err.println("-- upgraded request to https");
-    System.out.println(requestAsString);
-    
-    return requestAsString.getBytes("US-ASCII");
-  }
-  
-  private String setCookie(String request, String response)
-  {
-    Pattern cookiePattern = Pattern.compile("Cookie:\\s(.*\r\n)");
-    Pattern setCookiePattern = Pattern.compile("Set-Cookie:\\s(.*\r\n)");
-    
-    Matcher cookieMatcher = cookiePattern.matcher(request);
+    Pattern setCookiePattern = Pattern.compile("Set-Cookie:\\s([^\r]+)\r\n");
     Matcher setCookieMatcher = setCookiePattern.matcher(response);
+    
+    request = Strippers.removeCookie(request);
     
     if(setCookieMatcher.find()) 
     {
-      String cookie = "Cookie: " + setCookieMatcher.group(1);
-      if(cookieMatcher.find()) 
-      {
-        request = request.replaceAll(cookiePattern.toString(), cookie);
-      }
-      else
-      {
-        request = request.replaceFirst("\r\n\r\n", cookie + "\r\n");
-      }
+      String cookie = "\r\nCookie: " + setCookieMatcher.group(1);  
+      request = request.replaceFirst("\r\n\r\n", cookie + "\r\n\r\n");
+      System.err.println("-- Added cookie from redirect");
     }
     
     return request;
   }
 
-  private String upgradeToHttps(String request, String response)
+  private String setRedirectUri(String request, String response)
   {
-    Pattern locationPattern = Pattern.compile("Location:\\s(.*\r\n)");
+    Pattern locationPattern = Pattern.compile("Location:\\s([^\r]+)\r\n");
     Matcher locationMatcher = locationPattern.matcher(response);
     
     if(locationMatcher.find()) 
-    {
+    {    
       String location = locationMatcher.group(1);
-      request = request.replaceAll("http[^\\s]", location);
+      request = request.replaceFirst("http[^\\s]+", location);
+      System.err.println("-- upgraded to https");
     }
     
     return request;
