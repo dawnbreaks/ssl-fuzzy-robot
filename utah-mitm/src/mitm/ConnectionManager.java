@@ -76,7 +76,7 @@ public class ConnectionManager
         }
       }
     });
-    
+
     String request = new String(m_lastMessage, "UTF-8");
     request = Strippers.removeAcceptEncoding(request);
     request = Strippers.removeCookie(request);

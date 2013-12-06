@@ -6,6 +6,7 @@ import java.util.regex.Pattern;
 public class Strippers
 {
 
+
   public static String removeAcceptEncoding(String request) throws Exception
   { 
     Pattern p = Pattern.compile("Accept-Encoding:\\s[,a-zA-Z]+\r\n");
