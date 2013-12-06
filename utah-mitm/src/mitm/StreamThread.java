@@ -80,10 +80,9 @@ public class StreamThread implements Runnable
   {
     try
     {
-      byte[] buffer = new byte[BUFFER_SIZE];
-
       while (true)
       {
+        byte[] buffer = new byte[BUFFER_SIZE];
         final int bytesRead = m_in.read(buffer, 0, BUFFER_SIZE);
 
         if (bytesRead == -1)

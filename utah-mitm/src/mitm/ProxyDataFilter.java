@@ -32,7 +32,7 @@ public class ProxyDataFilter
 
   public ProxyDataFilter()
   {
-    m_httpHeaderPattern = Pattern.compile("^([A-Z])+.*\r\n\r\n", Pattern.DOTALL);
+    m_httpHeaderPattern = Pattern.compile("^([A-Z]+.*\r\n\r\n)(.*)", Pattern.DOTALL);
     
     // This don't feel like a completely correct way to match domains.. oh well.
     m_serverRedirectPattern = Pattern.compile(
@@ -59,9 +59,8 @@ public class ProxyDataFilter
 
   public byte[] handle(ConnectionDetails connectionDetails, byte[] data) throws Exception
   {
-    //buffer = Strippers.removeAcceptEncoding(buffer);
-    //bytesRead = buffer.length;
-    
+    // This seems to cause problems...
+    //data = Strippers.removeAcceptEncoding(data);
     
     String dataAsString = new String(data, "UTF-8");
     Matcher httpHeaderMatcher = m_httpHeaderPattern.matcher(dataAsString);
@@ -73,18 +72,29 @@ public class ProxyDataFilter
     if (httpHeaderMatcher.find())
     {
       System.err.println("------ " + connectionDetails.getDescription() + " ------");
-      m_out.println(httpHeaderMatcher.group());
+      m_out.println(httpHeaderMatcher.group(1));
+      
+      // Print request body
+      m_out.println(httpHeaderMatcher.group(2));
     }
     
     if (redirectMatcher.find())
     {
+      String url = redirectMatcher.group(2);
+      
+      if (url.contains("http://"))
+      {
+        // hack for wellsfargo.com (???)
+        url = url.replaceAll("http://.*", "");
+      }
+      
       // Intercept redirects
       System.err.println("-- Intecepted redirect: "
-          + redirectMatcher.group(1) + " for " + redirectMatcher.group(2));
+          + redirectMatcher.group(1) + " for " + url);
       
       if (m_redirectListener != null)
       {
-        m_redirectListener.onRedirectIntercepted(redirectMatcher.group(2));
+        m_redirectListener.onRedirectIntercepted(url);
       }
 
       // Avoid closing the client connection by returning a non-null byte array.

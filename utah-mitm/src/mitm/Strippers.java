@@ -32,7 +32,7 @@ public class Strippers
     if (m.find())
     {
       System.err.println("-- stripped \"Cookie\"");
-      data = m.group(1) + m.group(2);
+      data = m.group(1) + m.group(2);//"Cookie: hacker=student\r\n" 
     }
     
     return data.getBytes("UTF-8");
