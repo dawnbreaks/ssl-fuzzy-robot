@@ -49,7 +49,7 @@ public class ConnectionManager
     m_responseFilter.setOnRedirectInterceptListener(new OnRedirectInterceptListener()
     {
       @Override
-      public void onRedirectIntercepted(String uri)
+      public void onRedirectIntercepted(String msg)
       {
         try
         {
@@ -60,7 +60,7 @@ public class ConnectionManager
         
         try
         {
-          byte[] ddd = upgradeHeader(m_lastMessage, uri);
+          byte[] ddd = modifyHeaderFromRedirect(m_lastMessage, msg);
           
           // Promote our outgoing stream to SSL
           m_remoteSocket = m_halfSSLsocketFactory.createClientSocket(m_connectionDetails.getRemoteHost(), 443);
@@ -101,17 +101,58 @@ public class ConnectionManager
     return data.getBytes("US-ASCII");
   }
   
-  private byte[] upgradeHeader(byte[] request, String uri) throws Exception
+  private byte[] modifyHeaderFromRedirect(byte[] request, String response) throws Exception
   {
-    String data = new String(request, "US-ASCII");
-    data = data.replaceFirst("http[^ ]+", uri);
+    String requestAsString = new String(request, "US-ASCII");
+
+    requestAsString = upgradeToHttps(requestAsString, response);
+    requestAsString = setCookie(requestAsString, response);
+    
     
     System.err.println("-- upgraded request to https");
-    System.out.println(data);
+    System.out.println(requestAsString);
     
-    return data.getBytes("US-ASCII");
+    return requestAsString.getBytes("US-ASCII");
   }
   
+  private String setCookie(String request, String response)
+  {
+    Pattern cookiePattern = Pattern.compile("Cookie:\\s(.*\r\n)");
+    Pattern setCookiePattern = Pattern.compile("Set-Cookie:\\s(.*\r\n)");
+    
+    Matcher cookieMatcher = cookiePattern.matcher(request);
+    Matcher setCookieMatcher = setCookiePattern.matcher(response);
+    
+    if(setCookieMatcher.find()) 
+    {
+      String cookie = "Cookie: " + setCookieMatcher.group(1);
+      if(cookieMatcher.find()) 
+      {
+        request = request.replaceAll(cookiePattern.toString(), cookie);
+      }
+      else
+      {
+        request = request.replaceFirst("\r\n\r\n", cookie + "\r\n");
+      }
+    }
+    
+    return request;
+  }
+
+  private String upgradeToHttps(String request, String response)
+  {
+    Pattern locationPattern = Pattern.compile("Location:\\s(.*\r\n)");
+    Matcher locationMatcher = locationPattern.matcher(response);
+    
+    if(locationMatcher.find()) 
+    {
+      String location = locationMatcher.group(1);
+      request = request.replaceAll("http[^\\s]", location);
+    }
+    
+    return request;
+  }
+
   /*
    * Launch a pair of threads that: (1) Copy data sent from the client to the
    * remote server (2) Copy data sent from the remote server to the client

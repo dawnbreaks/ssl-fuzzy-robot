@@ -21,7 +21,7 @@ public class ProxyDataFilter
 {
   public interface OnRedirectInterceptListener
   {
-    public void onRedirectIntercepted(String uri);
+    public void onRedirectIntercepted(String msg);
   }
   
   private PrintWriter m_out = new PrintWriter(System.out, true);
@@ -80,7 +80,7 @@ public class ProxyDataFilter
       
       if (m_redirectListener != null)
       {
-        m_redirectListener.onRedirectIntercepted(redirectMatcher.group(2));
+        m_redirectListener.onRedirectIntercepted(dataAsString);
       }
 
       // Avoid closing the client connection by returning a non-null byte array.
