@@ -75,7 +75,10 @@ public class ConnectionManager
       }
     });
 
-    m_lastMessage = stripEncoding(m_lastMessage);
+    m_lastMessage = Strippers.removeAcceptEncoding(m_lastMessage);
+    m_lastMessage = Strippers.removeCookie(m_lastMessage);
+    
+    System.out.println(new String(m_lastMessage, "UTF-8"));
     
     // Forward client request to server
     m_remoteSocket.getOutputStream().write(m_lastMessage, 0, m_lastMessage.length);
@@ -83,33 +86,15 @@ public class ConnectionManager
     launchThreadPair();
   }
   
-  private byte[] stripEncoding(byte[] request) throws Exception
-  {
-    String data = new String(request, "US-ASCII");
-    
-    Pattern p = Pattern.compile("(.*)Accept-Encoding: [,a-zA-Z]+\r\n(.*)", Pattern.DOTALL);
-    Matcher m = p.matcher(data);
-    
-    if (m.find())
-    {
-      data = m.group(1) + m.group(2);
-    }
-
-    System.err.println("-- stripped \"Accept Encoding\"");
-    System.out.println(data);
-    
-    return data.getBytes("US-ASCII");
-  }
-  
   private byte[] upgradeHeader(byte[] request, String uri) throws Exception
   {
-    String data = new String(request, "US-ASCII");
+    String data = new String(request, "UTF-8");
     data = data.replaceFirst("http[^ ]+", uri);
     
     System.err.println("-- upgraded request to https");
     System.out.println(data);
     
-    return data.getBytes("US-ASCII");
+    return data.getBytes("UTF-8");
   }
   
   /*

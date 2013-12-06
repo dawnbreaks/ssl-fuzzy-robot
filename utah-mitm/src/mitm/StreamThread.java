@@ -90,9 +90,12 @@ public class StreamThread implements Runnable
         {
           break;
         }
+        
+        // To make things simpler, resize buffer to min size
+        byte[] data = new byte[bytesRead];
+        System.arraycopy(buffer, 0, data, 0, bytesRead);
 
-        final byte[] newBytes = m_filter.handle(m_connectionDetails,
-            buffer, bytesRead);
+        final byte[] newBytes = m_filter.handle(m_connectionDetails, data);
 
         m_outputWriter.flush();
 
