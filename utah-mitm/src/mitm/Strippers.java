@@ -5,37 +5,32 @@ import java.util.regex.Pattern;
 
 public class Strippers
 {
-
-  public static byte[] removeAcceptEncoding(byte[] request) throws Exception
-  {
-    String data = new String(request, "UTF-8");
-    
-    Pattern p = Pattern.compile("(.*)Accept-Encoding: [,a-zA-Z]+\r\n(.*)", Pattern.DOTALL);
-    Matcher m = p.matcher(data);
+  public static String removeAcceptEncoding(String request) throws Exception
+  { 
+    Pattern p = Pattern.compile("Accept-Encoding:\\s[,a-zA-Z]+\r\n");
+    Matcher m = p.matcher(request);
     
     if (m.find())
     {
       System.err.println("-- stripped \"Accept Encoding\"");
-      data = m.group(1) + m.group(2);
+      request = request.replaceAll(p.toString(), "");
     }
     
-    return data.getBytes("UTF-8");
+    return request;
   }
   
-  public static byte[] removeCookie(byte[] request) throws Exception
-  {
-    String data = new String(request, "UTF-8");
-    
-    Pattern p = Pattern.compile("(.*)Cookie: [^\r]+\r\n(.*)", Pattern.DOTALL);
-    Matcher m = p.matcher(data);
+  public static String removeCookie(String request) throws Exception
+  {   
+    Pattern p = Pattern.compile("Cookie:\\s[^\r]+\r\n");
+    Matcher m = p.matcher(request);
 
     if (m.find())
     {
       System.err.println("-- stripped \"Cookie\"");
-      data = m.group(1) + m.group(2);//"Cookie: hacker=student\r\n" 
+      request = request.replaceAll(p.toString(), "");
     }
     
-    return data.getBytes("UTF-8");
+    return request;
   }
   
 }

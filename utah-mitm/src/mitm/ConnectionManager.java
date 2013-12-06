@@ -49,7 +49,7 @@ public class ConnectionManager
     m_responseFilter.setOnRedirectInterceptListener(new OnRedirectInterceptListener()
     {
       @Override
-      public void onRedirectIntercepted(String uri)
+      public void onRedirectIntercepted(String msg)
       {
         try
         {
@@ -60,13 +60,15 @@ public class ConnectionManager
         
         try
         {
-          byte[] ddd = upgradeHeader(m_lastMessage, uri);
+          byte[] ddd = modifyHeaderFromRedirect(m_lastMessage, msg);       
+          
+          System.out.println(new String(ddd, "UTF-8"));
           
           // Promote our outgoing stream to SSL
           m_remoteSocket = m_halfSSLsocketFactory.createClientSocket(m_connectionDetails.getRemoteHost(), 443);
           m_remoteSocket.getOutputStream().write(ddd, 0, ddd.length);
           m_clientServerStream.changeOutputStream(m_remoteSocket.getOutputStream());
-          m_serverClientStream.changeInputStream(m_remoteSocket.getInputStream());
+          m_serverClientStream.changeInputStream(m_remoteSocket.getInputStream());         
         }
         catch (Exception e) 
         {
@@ -75,28 +77,73 @@ public class ConnectionManager
       }
     });
 
-    m_lastMessage = Strippers.removeAcceptEncoding(m_lastMessage);
-    //m_lastMessage = Strippers.removeCookie(m_lastMessage);
+    String request = new String(m_lastMessage, "UTF-8");
+    request = Strippers.removeAcceptEncoding(request);
+    request = Strippers.removeCookie(request);
+    m_lastMessage = request.getBytes("UTF-8");
     
-    System.out.println(new String(m_lastMessage, "UTF-8"));
+    System.out.println(request);
     
     // Forward client request to server
     m_remoteSocket.getOutputStream().write(m_lastMessage, 0, m_lastMessage.length);
 
     launchThreadPair();
   }
-  
-  private byte[] upgradeHeader(byte[] request, String uri) throws Exception
+    
+  private byte[] modifyHeaderFromRedirect(byte[] requestAsBytes, String response) throws Exception
   {
-    String data = new String(request, "UTF-8");
-    data = data.replaceFirst("http[^ ]+", uri);
-    
-    System.err.println("-- upgraded request to https");
-    System.out.println(data);
-    
-    return data.getBytes("UTF-8");
+    String request = new String(requestAsBytes, "UTF-8");
+
+    request = setRedirectUri(request, response);
+    request = setCookie(request, response);
+    request = Strippers.removeAcceptEncoding(request);
+
+    return request.getBytes("UTF-8");
   }
   
+  private String setCookie(String request, String response) throws Exception
+  {
+    Pattern setCookiePattern = Pattern.compile("Set-Cookie:\\s([^\r]+)\r\n");
+    Matcher setCookieMatcher = setCookiePattern.matcher(response);
+    
+    request = Strippers.removeCookie(request);
+    
+    if(setCookieMatcher.find()) 
+    {
+      String cookie = "\r\nCookie: " + setCookieMatcher.group(1);  
+      request = request.replaceFirst("\r\n\r\n", cookie + "\r\n\r\n");
+      System.err.println("-- Added cookie from redirect");
+    }
+    
+    return request;
+  }
+
+  private String setRedirectUri(String request, String response)
+  {
+    Pattern locationPattern = Pattern.compile("Location:\\s([^\r]+)\r\n");
+    Matcher locationMatcher = locationPattern.matcher(response);
+    
+    if(locationMatcher.find())
+    {
+      String location = locationMatcher.group(1);
+      
+      if (location.indexOf("http://") > 7)
+      {
+        // hack for wellsfargo.com (???) where location 
+        // looks like https://blah.comhttp://blah.com
+        location = location.replaceAll("http://.*", "");
+        
+        if (location.length() == 0)
+          throw new IllegalStateException("WTF wells fargo!");
+      }
+      
+      request = request.replaceFirst("http[^\\s]+", location);
+      System.err.println("-- upgraded to https");
+    }
+    
+    return request;
+  }
+
   /*
    * Launch a pair of threads that: (1) Copy data sent from the client to the
    * remote server (2) Copy data sent from the remote server to the client

@@ -25,10 +25,11 @@ public class ProxyEngine implements Runnable
   {
     m_localHost = localHost;
     m_localPort = localPort;
+    
     m_outputWriter = new PrintWriter(System.out, true);
     m_plainSocketFactory = new PlainSocketFactory();
     m_httpConnectPattern = Pattern.compile("^([A-Z]+)[ \\t]+http://([^/:]+):?(\\d*)/.*\r\n\r\n", Pattern.DOTALL);
-
+    
     m_serverSocket = m_plainSocketFactory.createServerSocket(m_localHost, m_localPort, timeout);    
   }
 

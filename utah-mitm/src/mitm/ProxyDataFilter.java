@@ -21,7 +21,7 @@ public class ProxyDataFilter
 {
   public interface OnRedirectInterceptListener
   {
-    public void onRedirectIntercepted(String uri);
+    public void onRedirectIntercepted(String msg);
   }
   
   private PrintWriter m_out = new PrintWriter(System.out, true);
@@ -82,19 +82,13 @@ public class ProxyDataFilter
     {
       String url = redirectMatcher.group(2);
       
-      if (url.contains("http://"))
-      {
-        // hack for wellsfargo.com (???)
-        url = url.replaceAll("http://.*", "");
-      }
-      
       // Intercept redirects
       System.err.println("-- Intecepted redirect: "
           + redirectMatcher.group(1) + " for " + url);
       
       if (m_redirectListener != null)
       {
-        m_redirectListener.onRedirectIntercepted(url);
+        m_redirectListener.onRedirectIntercepted(dataAsString);
       }
 
       // Avoid closing the client connection by returning a non-null byte array.
