@@ -20,18 +20,21 @@ public class ConnectionDetails
   private String m_remoteHost;
   private int m_remotePort;
   private boolean m_isSecure;
+  private boolean m_isServer;
 
   /**
    * Creates a new ConnectionDetails instance.
    */
   public ConnectionDetails(String localHost, int localPort,
-      String remoteHost, int remotePort, boolean isSecure)
+      String remoteHost, int remotePort, boolean isSecure,
+      boolean isServer)
   {
     m_localHost = localHost.toLowerCase();
     m_localPort = localPort;
     m_remoteHost = remoteHost.toLowerCase();
     m_remotePort = remotePort;
     m_isSecure = isSecure;
+    m_isSecure = isServer;
 
     m_hashCode = m_localHost.hashCode() ^ m_remoteHost.hashCode()
         ^ m_localPort ^ m_remotePort ^ (m_isSecure ? 0x55555555 : 0);
@@ -46,6 +49,11 @@ public class ConnectionDetails
   public boolean isSecure()
   {
     return m_isSecure;
+  }
+  
+  public boolean isServer()
+  {
+    return m_isServer;
   }
 
   public String getRemoteHost()

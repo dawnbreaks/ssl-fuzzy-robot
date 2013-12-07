@@ -49,7 +49,7 @@ public class ConnectionManager
     m_responseFilter.setOnRedirectInterceptListener(new OnRedirectInterceptListener()
     {
       @Override
-      public void onRedirectIntercepted(String msg)
+      public void onRedirectIntercepted(HttpMessage response)
       {
         try
         {
@@ -60,15 +60,47 @@ public class ConnectionManager
         
         try
         {
-          byte[] ddd = modifyHeaderFromRedirect(m_lastMessage, msg);       
+          byte[] ddd = modifyHeaderFromRedirect(m_lastMessage, response.getDataAsString());          
+          HttpMessage lastRequest = new HttpMessage(m_lastMessage);
+          
+          if(!getRequestMethod(lastRequest).equals("GET"))
+          {
+            HttpMessage request = new HttpMessage();
+            request.appendHeader("Top", "GET " + response.get("Location").get(0) + " HTTP/1.1");
+            request.appendHeader("Host", lastRequest.get("Host").get(0));
+            request.appendHeader("Accept-Language", lastRequest.get("Accept-Language").get(0));
+            request.appendHeader("User-Agent", lastRequest.get("User-Agent").get(0));
+            request.appendHeader("Accept", lastRequest.get("Accept").get(0));
+            request.appendHeader("Proxy-Connection", lastRequest.get("Proxy-Connection").get(0));
+            request.appendHeader("Referer", response.get("Location").get(0));
+            
+            String cookies = "";
+            for(int i = 0; i < response.get("Set-Cookie").size(); i++)
+            {
+              String cookie = response.get("Set-Cookie").get(i).split(";")[0];
+              if(!cookie.contains("deleted")) 
+              {
+                cookies += cookie;
+               
+                if(i+1 < response.get("Set-Cookie").size()) {
+                  cookies += "; ";
+                }
+              }        
+            }
+            
+            request.appendHeader("Cookie", cookies);
+            
+            ddd = request.getData();
+          }
           
           System.out.println(new String(ddd, "UTF-8"));
           
           // Promote our outgoing stream to SSL
-          m_remoteSocket = m_halfSSLsocketFactory.createClientSocket(m_connectionDetails.getRemoteHost(), 443);
+          m_remoteSocket = m_halfSSLsocketFactory.createClientSocket(m_connectionDetails.getRemoteHost(), 443);          
           m_remoteSocket.getOutputStream().write(ddd, 0, ddd.length);
           m_clientServerStream.changeOutputStream(m_remoteSocket.getOutputStream());
-          m_serverClientStream.changeInputStream(m_remoteSocket.getInputStream());         
+          m_serverClientStream.changeInputStream(m_remoteSocket.getInputStream());
+          
         }
         catch (Exception e) 
         {
@@ -77,45 +109,76 @@ public class ConnectionManager
       }
     });
 
-    String request = new String(m_lastMessage, "UTF-8");
-    request = Strippers.removeAcceptEncoding(request);
-    request = Strippers.removeCookie(request);
-    m_lastMessage = request.getBytes("UTF-8");
+    HttpMessage request = new HttpMessage(m_lastMessage);
+    CookieCleaner cc = CookieCleaner.getInstance();
     
-    System.out.println(request);
-    
-    // Forward client request to server
-    m_remoteSocket.getOutputStream().write(m_lastMessage, 0, m_lastMessage.length);
+    String method = getRequestMethod(request);
+    String path = getRequestPath(request);
 
+    cleanHeaders(request);
+    
+    System.out.println(request.getDataAsString());
+    
+    if(cc.isClean(method, m_connectionDetails.getLocalHost(), m_connectionDetails.getRemoteHost(), request)) 
+    {
+      // Forward client request to server
+      System.err.println("-- Clean cookies");  
+      
+      m_lastMessage = request.getData();
+      m_remoteSocket.getOutputStream().write(m_lastMessage, 0, m_lastMessage.length);
+    }
+    else
+    {
+      System.err.println("-- Dirty cookies");
+      HttpMessage redirect = cc.getExpiredCookieRedirectMessage(method, m_connectionDetails.getLocalHost(), m_connectionDetails.getRemoteHost(), request, path);
+      System.out.println(redirect.getDataAsString());
+      m_localSocket.getOutputStream().write(redirect.getData());
+    }
+    
     launchThreadPair();
   }
+
+  private void cleanHeaders(HttpMessage request)
+  {
+    request.removeHeader("Accept-Encoding");
+    request.removeHeader("If-Modified-Since");
+    request.removeHeader("Cache-Control");
+  }
+  
+  private String getRequestMethod(HttpMessage request) 
+  {
+    // get method of request
+    Pattern httpMethodPattern = Pattern.compile("^([A-Z]+)");
+    Matcher httpMethodMatcher = httpMethodPattern.matcher(request.getTopLine());
+    httpMethodMatcher.find();
     
+    String method = httpMethodMatcher.group(1);
+    return method;
+  }
+  
+  private String getRequestPath(HttpMessage request)
+  {
+    Pattern httpPathPattern = Pattern.compile("http://[^/\\s]+([^\\s]+)");
+    Matcher httpPathMatcher = httpPathPattern.matcher(request.getTopLine());
+    String path = "";
+    
+    if(httpPathMatcher.find()) 
+    {
+      path = httpPathMatcher.group(1);
+    }
+    
+    return path;
+  }
+
   private byte[] modifyHeaderFromRedirect(byte[] requestAsBytes, String response) throws Exception
   {
     String request = new String(requestAsBytes, "UTF-8");
 
     request = setRedirectUri(request, response);
-    request = setCookie(request, response);
     request = Strippers.removeAcceptEncoding(request);
+//    request = response.replaceAll("https", "http");
 
     return request.getBytes("UTF-8");
-  }
-  
-  private String setCookie(String request, String response) throws Exception
-  {
-    Pattern setCookiePattern = Pattern.compile("Set-Cookie:\\s([^\r]+)\r\n");
-    Matcher setCookieMatcher = setCookiePattern.matcher(response);
-    
-    request = Strippers.removeCookie(request);
-    
-    if(setCookieMatcher.find()) 
-    {
-      String cookie = "\r\nCookie: " + setCookieMatcher.group(1);  
-      request = request.replaceFirst("\r\n\r\n", cookie + "\r\n\r\n");
-      System.err.println("-- Added cookie from redirect");
-    }
-    
-    return request;
   }
 
   private String setRedirectUri(String request, String response)
@@ -156,7 +219,8 @@ public class ConnectionManager
           m_connectionDetails.getLocalPort(),
           m_connectionDetails.getRemoteHost(),
           m_connectionDetails.getRemotePort(),
-          m_connectionDetails.isSecure()),
+          m_connectionDetails.isSecure(),
+          m_connectionDetails.isServer()),
         m_localSocket.getInputStream(),
         m_remoteSocket.getOutputStream(),
         m_requestFilter,
@@ -168,7 +232,8 @@ public class ConnectionManager
           m_connectionDetails.getRemotePort(),
           m_connectionDetails.getLocalHost(),
           m_connectionDetails.getLocalPort(),
-          m_connectionDetails.isSecure()),
+          m_connectionDetails.isSecure(),
+          !m_connectionDetails.isServer()),
         m_remoteSocket.getInputStream(),
         m_localSocket.getOutputStream(),
         m_responseFilter,

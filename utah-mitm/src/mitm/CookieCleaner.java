@@ -40,6 +40,20 @@ public class CookieCleaner
     return domain;
   }
   
+  public HttpMessage getExpiredCookieRedirectMessage(String method, String client, String host, HttpMessage request, String path)
+  {
+    HttpMessage redirect = new HttpMessage();
+    redirect.appendHeader("Top", "HTTP/1.1 302 Moved");
+    redirect.appendHeader("Connection", "close");
+    redirect.appendHeader("Location", "http://" + host + path);
+    
+    List<String> expireHeadersList = getExpireHeaders(method, client, host, request, path);
+    String[] expireHeaders = expireHeadersList.toArray(new String[expireHeadersList.size()]);
+    redirect.replaceHeader("Set-Cookie", expireHeaders);
+    
+    return redirect;
+  }
+  
   public List<String> getExpireCookieStringFor(String cookieKey, String host,
       String domain, String path)
   {
@@ -47,17 +61,17 @@ public class CookieCleaner
     List<String> expireList = new ArrayList<String>();
     
     expireList.add(cookieKey + "=" + "EXPIRED;Path=/;Domain=" + domain + 
-        ";Expires=Mon, 01-Jan-1990 00:00:00 GMT\r\n");
+        ";Expires=Mon, 01-Jan-1990 00:00:00 GMT");
     
     expireList.add(cookieKey + "=" + "EXPIRED;Path=/;Domain=" + host + 
-        ";Expires=Mon, 01-Jan-1990 00:00:00 GMT\r\n");
+        ";Expires=Mon, 01-Jan-1990 00:00:00 GMT");
     
     if(pathList.length > 2) {
       expireList.add(cookieKey + "=" + "EXPIRED;Path=/" + pathList[1] + ";Domain=" +
-          domain + ";Expires=Mon, 01-Jan-1990 00:00:00 GMT\r\n");
+          domain + ";Expires=Mon, 01-Jan-1990 00:00:00 GMT");
       
       expireList.add(cookieKey + "=" + "EXPIRED;Path=/" + pathList[1] + ";Domain=" +
-          host + ";Expires=Mon, 01-Jan-1990 00:00:00 GMT\r\n");
+          host + ";Expires=Mon, 01-Jan-1990 00:00:00 GMT");
     }
     
     return expireList;
@@ -68,10 +82,12 @@ public class CookieCleaner
     add(client, domain);
     
     List<String> expiredCookies = new ArrayList<String>();
-    List<String> cookies = headers.get("cookie");
+    List<String> cookies = headers.get("Cookie");
     
-    for(String cookie : cookies) {
-      for(String subCookie : cookie.split(";")) {
+    for(String cookie : cookies) 
+    {
+      for(String subCookie : cookie.split(";")) 
+      {
         String cookieKey = subCookie.split("=")[0].trim();
         List<String> expireHeadersForCookie = getExpireCookieStringFor(cookieKey, host, domain, path);
         expiredCookies.addAll(expireHeadersForCookie);
@@ -83,11 +99,11 @@ public class CookieCleaner
 
   public boolean hasCookies(HttpMessage headers)
   {
-    return !headers.get("cookie").isEmpty();
+    return !headers.get("Cookie").isEmpty();
   }
   
   public boolean isClean(String method, String client, String host, HttpMessage headers) {
-    if(method == "POST" || !hasCookies(headers))
+    if(method.equals("POST") || !hasCookies(headers))
     {
       return true;
     }
