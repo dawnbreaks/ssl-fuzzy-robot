@@ -26,29 +26,6 @@ public class CookieCleaner
   public synchronized boolean add(String client, String domain) {
     return m_cleanedCookies.add(client + domain);
   }
-  
-  // TODO: return http message class
-  public List<String> getExpireHeaders(String method, String client, String host, HttpMessage headers, String path) {
-    String domain = getDomainFor(host);
-    add(client, domain);
-    
-    List<String> expiredCookies = new ArrayList<String>();
-    ArrayList<String> cookies = new ArrayList<String>();
-    //cookies = headers.get("cookie");
-    
-    for(String cookie : cookies) {
-      List<String> expireHeaders = new ArrayList<String>();
-      for(String subCookie : cookie.split(";")) {
-        String cookieKey = subCookie.split("=")[0].trim();
-        String expireHeadersForCookie = getExpireCookieStringFor(cookieKey, host, domain, path);
-        expireHeaders.add(expireHeadersForCookie);
-      }
-      expiredCookies.add(join(expireHeaders, ";"));
-    }
-    
-    
-    return expiredCookies;
-  }
 
   public String getDomainFor(String host)
   {
@@ -63,25 +40,57 @@ public class CookieCleaner
     return domain;
   }
   
-  public String getExpireCookieStringFor(String cookieKey, String host,
+  public List<String> getExpireCookieStringFor(String cookieKey, String host,
       String domain, String path)
   {
-    // TODO Auto-generated method stub
-    return null;
-  }
-
-
-  public boolean hasCookies(String headers)
-  {
-    // TODO: use http message class
-    // if headers contains cookie key
-    // then return true
-    return false;
+    String[] pathList = path.split("/");
+    List<String> expireList = new ArrayList<String>();
+    
+    expireList.add(cookieKey + "=" + "EXPIRED;Path=/;Domain=" + domain + 
+        ";Expires=Mon, 01-Jan-1990 00:00:00 GMT\r\n");
+    
+    expireList.add(cookieKey + "=" + "EXPIRED;Path=/;Domain=" + host + 
+        ";Expires=Mon, 01-Jan-1990 00:00:00 GMT\r\n");
+    
+    if(pathList.length > 2) {
+      expireList.add(cookieKey + "=" + "EXPIRED;Path=/" + pathList[1] + ";Domain=" +
+          domain + ";Expires=Mon, 01-Jan-1990 00:00:00 GMT\r\n");
+      
+      expireList.add(cookieKey + "=" + "EXPIRED;Path=/" + pathList[1] + ";Domain=" +
+          host + ";Expires=Mon, 01-Jan-1990 00:00:00 GMT\r\n");
+    }
+    
+    return expireList;
   }
   
-  public boolean isClean(String method, String client, String host, String headers) {
-    if(method == "POST")      return true;  
-    if(!hasCookies(headers))  return true;
+  public List<String> getExpireHeaders(String method, String client, String host, HttpMessage headers, String path) {
+    String domain = getDomainFor(host);
+    add(client, domain);
+    
+    List<String> expiredCookies = new ArrayList<String>();
+    List<String> cookies = headers.get("cookie");
+    
+    for(String cookie : cookies) {
+      for(String subCookie : cookie.split(";")) {
+        String cookieKey = subCookie.split("=")[0].trim();
+        List<String> expireHeadersForCookie = getExpireCookieStringFor(cookieKey, host, domain, path);
+        expiredCookies.addAll(expireHeadersForCookie);
+      }      
+    }
+    
+    return expiredCookies;
+  }
+
+  public boolean hasCookies(HttpMessage headers)
+  {
+    return !headers.get("cookie").isEmpty();
+  }
+  
+  public boolean isClean(String method, String client, String host, HttpMessage headers) {
+    if(method == "POST" || !hasCookies(headers))
+    {
+      return true;
+    }
     
     return m_cleanedCookies.contains(client + getDomainFor(host));
   }
