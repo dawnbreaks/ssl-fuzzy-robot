@@ -8,6 +8,8 @@ import java.net.Socket;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import mitm.HttpParser.OnMessageParsedListener;
+
 public class ProxyEngine implements Runnable
 {
   private String m_localHost;
@@ -62,28 +64,43 @@ public class ProxyEngine implements Runnable
           // HTTP proxy request.
 
           final String remoteHost = httpConnectMatcher.group(2);
-          int remotePort = 80;
+          int rPort = 80;
           try 
           {
-            remotePort = Integer.parseInt(httpConnectMatcher.group(3));
+            rPort = Integer.parseInt(httpConnectMatcher.group(3));
           }
           catch (final NumberFormatException e) 
           {
             // remotePort = 80;
           }
+          final int remotePort = rPort;
           
-          Socket remoteSocket = m_plainSocketFactory.createClientSocket(remoteHost, remotePort);
+          final Socket remoteSocket = m_plainSocketFactory.createClientSocket(remoteHost, remotePort);
           
           byte[] connectMessage = new byte[bytesRead];
           System.arraycopy(buffer, 0, connectMessage, 0, bytesRead);
           
-          // Delegate work to a new manager for the current connection
-          new ConnectionManager(
-              localSocket, 
-              remoteSocket, 
-              new ConnectionDetails(m_localHost, m_localPort, remoteHost, remotePort, false, false), 
-              connectMessage,
-              m_outputWriter);
+          new HttpParser(new OnMessageParsedListener()
+          {
+            @Override
+            public void newMessageParsed(HttpMessage message)
+            {
+              try
+              {
+                // Delegate work to a new manager for the current connection
+                new ConnectionManager(
+                    localSocket, 
+                    remoteSocket, 
+                    new ConnectionDetails(m_localHost, m_localPort, remoteHost, remotePort, false, false), 
+                    message,
+                    m_outputWriter);
+              }
+              catch (Exception e) 
+              {
+                e.printStackTrace(System.err);
+              }
+            }
+          }).parse(connectMessage);
         }
       }
       catch (Exception e)

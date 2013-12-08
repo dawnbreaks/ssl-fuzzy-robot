@@ -2,7 +2,6 @@ package mitm;
 
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.io.UnsupportedEncodingException;
 import java.net.Socket;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -19,7 +18,7 @@ import mitm.ProxyDataFilter.OnRedirectInterceptListener;
  */
 public class ConnectionManager
 {
-  private byte[] m_lastMessage;
+  private HttpMessage m_lastMessage;
   private Socket m_localSocket;
   private Socket m_remoteSocket;
   private ConnectionDetails m_connectionDetails;
@@ -34,7 +33,7 @@ public class ConnectionManager
       Socket localSocket,
       Socket remoteSocket,
       ConnectionDetails connectionDetails,
-      byte[] connectMessage,
+      HttpMessage connectMessage,
       PrintWriter outputWriter) throws Exception
   {
     m_localSocket = localSocket;
@@ -60,18 +59,19 @@ public class ConnectionManager
         
         try
         {
-          byte[] ddd = modifyHeaderFromRedirect(m_lastMessage, response.getDataAsString());          
-          HttpMessage lastRequest = new HttpMessage(m_lastMessage);
           
-          if(!getRequestMethod(lastRequest).equals("GET"))
+          modifyHeaderFromRedirect(m_lastMessage, response);
+          HttpMessage request = m_lastMessage;
+          
+          if(!getRequestMethod(m_lastMessage).equals("GET"))
           {
-            HttpMessage request = new HttpMessage();
+            request = new HttpMessage();
             request.appendHeader("Top", "GET " + response.get("Location").get(0) + " HTTP/1.1");
-            request.appendHeader("Host", lastRequest.get("Host").get(0));
-            request.appendHeader("Accept-Language", lastRequest.get("Accept-Language").get(0));
-            request.appendHeader("User-Agent", lastRequest.get("User-Agent").get(0));
-            request.appendHeader("Accept", lastRequest.get("Accept").get(0));
-            request.appendHeader("Proxy-Connection", lastRequest.get("Proxy-Connection").get(0));
+            request.appendHeader("Host", m_lastMessage.get("Host").get(0));
+            request.appendHeader("Accept-Language", m_lastMessage.get("Accept-Language").get(0));
+            request.appendHeader("User-Agent", m_lastMessage.get("User-Agent").get(0));
+            request.appendHeader("Accept", m_lastMessage.get("Accept").get(0));
+            request.appendHeader("Proxy-Connection", m_lastMessage.get("Proxy-Connection").get(0));
             request.appendHeader("Referer", response.get("Location").get(0));
             
             String cookies = "";
@@ -89,51 +89,48 @@ public class ConnectionManager
             }
             
             request.appendHeader("Cookie", cookies);
-            
-            ddd = request.getData();
           }
           
-          System.out.println(new String(ddd, "UTF-8"));
+          System.out.println(request.getDataAsString());
           
           // Promote our outgoing stream to SSL
-          m_remoteSocket = m_halfSSLsocketFactory.createClientSocket(m_connectionDetails.getRemoteHost(), 443);          
-          m_remoteSocket.getOutputStream().write(ddd, 0, ddd.length);
+          m_remoteSocket = m_halfSSLsocketFactory.createClientSocket(m_connectionDetails.getRemoteHost(), 443); 
           m_clientServerStream.changeOutputStream(m_remoteSocket.getOutputStream());
-          m_serverClientStream.changeInputStream(m_remoteSocket.getInputStream());
-          
+          m_serverClientStream.changeInputStream(m_remoteSocket.getInputStream());         
+          m_remoteSocket.getOutputStream().write(request.getData());
         }
-        catch (Exception e) 
+        catch (Exception e)
         {
           e.printStackTrace(System.err);
         }
       }
     });
-
-    HttpMessage request = new HttpMessage(m_lastMessage);
+    
     CookieCleaner cc = CookieCleaner.getInstance();
     
-    String method = getRequestMethod(request);
-    String path = getRequestPath(request);
-
-    cleanHeaders(request);
+    String method = getRequestMethod(m_lastMessage);
+    String path = getRequestPath(m_lastMessage);
+    cleanHeaders(m_lastMessage);
     
-    System.out.println(request.getDataAsString());
+    System.out.println(m_lastMessage.getDataAsString());
     
-    if(cc.isClean(method, m_connectionDetails.getLocalHost(), m_connectionDetails.getRemoteHost(), request)) 
+    if(cc.isClean(method, m_connectionDetails.getLocalHost(), m_connectionDetails.getRemoteHost(), m_lastMessage)) 
     {
       // Forward client request to server
-      System.err.println("-- Clean cookies");  
+      System.err.println("-- Clean cookies");
       
-      m_lastMessage = request.getData();
-      m_remoteSocket.getOutputStream().write(m_lastMessage, 0, m_lastMessage.length);
+      m_remoteSocket.getOutputStream().write(m_lastMessage.getData());
     }
     else
     {
       System.err.println("-- Dirty cookies");
-      HttpMessage redirect = cc.getExpiredCookieRedirectMessage(method, m_connectionDetails.getLocalHost(), m_connectionDetails.getRemoteHost(), request, path);
+      HttpMessage redirect = cc.getExpiredCookieRedirectMessage(method, m_connectionDetails.getLocalHost(), m_connectionDetails.getRemoteHost(), m_lastMessage, path);
       System.out.println(redirect.getDataAsString());
       m_localSocket.getOutputStream().write(redirect.getData());
     }
+
+//DEBUG
+//    m_remoteSocket.getOutputStream().write(m_lastMessage.getData());
     
     launchThreadPair();
   }
@@ -170,41 +167,32 @@ public class ConnectionManager
     return path;
   }
 
-  private byte[] modifyHeaderFromRedirect(byte[] requestAsBytes, String response) throws Exception
+  private void modifyHeaderFromRedirect(HttpMessage request, HttpMessage response) throws Exception
   {
-    String request = new String(requestAsBytes, "UTF-8");
-
-    request = setRedirectUri(request, response);
-    request = Strippers.removeAcceptEncoding(request);
+    setRedirectUri(request, response);
+    Strippers.removeAcceptEncoding(request);
 //    request = response.replaceAll("https", "http");
-
-    return request.getBytes("UTF-8");
   }
 
-  private String setRedirectUri(String request, String response)
+  private void setRedirectUri(HttpMessage request, HttpMessage response)
   {
-    Pattern locationPattern = Pattern.compile("Location:\\s([^\r]+)\r\n");
-    Matcher locationMatcher = locationPattern.matcher(response);
+    String location = response.get("Location").get(0);
     
-    if(locationMatcher.find())
+    if (location.indexOf("http://") > 7)
     {
-      String location = locationMatcher.group(1);
+      // hack for wellsfargo.com (???) where location 
+      // looks like https://blah.comhttp://blah.com
+      location = location.replaceAll("http://.*", "");
       
-      if (location.indexOf("http://") > 7)
-      {
-        // hack for wellsfargo.com (???) where location 
-        // looks like https://blah.comhttp://blah.com
-        location = location.replaceAll("http://.*", "");
-        
-        if (location.length() == 0)
-          throw new IllegalStateException("WTF wells fargo!");
-      }
-      
-      request = request.replaceFirst("http[^\\s]+", location);
-      System.err.println("-- upgraded to https");
+      if (location.length() == 0)
+        throw new IllegalStateException("WTF wells fargo!");
     }
     
-    return request;
+    String requestTop = request.getTopLine();
+    requestTop = requestTop.replaceFirst("http[^\\s]+", location);
+    request.replaceHeader("Top", requestTop);
+    
+    System.err.println("-- upgraded to https");
   }
 
   /*

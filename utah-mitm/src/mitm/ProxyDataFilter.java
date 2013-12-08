@@ -21,11 +21,10 @@ public class ProxyDataFilter
 {
   public interface OnRedirectInterceptListener
   {
-    public void onRedirectIntercepted(HttpMessage response);
+    public void onRedirectIntercepted(HttpMessage message);
   }
   
   private PrintWriter m_out = new PrintWriter(System.out, true);
-  private Pattern m_httpHeaderPattern;
   private Pattern m_serverRedirectPattern;
   private Pattern m_httpPattern;
   private Pattern m_httpsPattern;
@@ -33,12 +32,7 @@ public class ProxyDataFilter
 
   public ProxyDataFilter()
   {
-    m_httpHeaderPattern = Pattern.compile("^([A-Z]+.*\r\n\r\n)(.*)", Pattern.DOTALL);
-    
-    // This don't feel like a completely correct way to match domains.. oh well.
-    m_serverRedirectPattern = Pattern.compile(
-        "^.*HTTP.* (30\\d [^\r]*).*(https://[^\r]+).*\r\n\r\n", Pattern.DOTALL);
-    
+    m_serverRedirectPattern = Pattern.compile("^HTTP.* (30\\d.*)");
     m_httpPattern = Pattern.compile("(http://[^\\s]+)");
     m_httpsPattern = Pattern.compile("(https://[^\\s]+)");
   }
@@ -59,33 +53,31 @@ public class ProxyDataFilter
     m_redirectListener = l;
   }
 
-  public byte[] handle(ConnectionDetails connectionDetails, byte[] data) throws Exception
-  {
-    String message = new String(data, "UTF-8");
-    Matcher redirectMatcher = m_serverRedirectPattern.matcher(message);
-    Matcher httpMatcher = m_httpPattern.matcher(message);
-    Matcher httpsMatcher = m_httpsPattern.matcher(message);
+  public HttpMessage handle(ConnectionDetails connectionDetails, HttpMessage message) throws Exception
+  {    
+    Matcher redirectMatcher = m_serverRedirectPattern.matcher(message.getTopLine());
+    Matcher httpMatcher = m_httpPattern.matcher(message.getBodyAsString());
+    Matcher httpsMatcher = m_httpsPattern.matcher(message.getBodyAsString());
 
-    message = Strippers.removeAcceptEncoding(message);
+    Strippers.removeAcceptEncoding(message);
+    Strippers.removeContentSecurityPolicy(message);
     
     System.err.println("------ " + connectionDetails.getDescription() + " ------");
-    System.out.println(message);
+    System.out.println(message.getHeadersAsString());
     
     if (redirectMatcher.find())
     {
-      String url = redirectMatcher.group(2);
-      
       // Intercept redirects
       System.err.println("-- Intecepted redirect: "
-          + redirectMatcher.group(1) + " for " + url);
+          + redirectMatcher.group(1) + " for " + message.get("Location").get(0));
       
       if (m_redirectListener != null)
       {
-        m_redirectListener.onRedirectIntercepted(new HttpMessage(data));
+        m_redirectListener.onRedirectIntercepted(message);
       }
 
-      // Avoid closing the client connection by returning a non-null byte array.
-      return new byte[0];
+      // Avoid closing the client connection by returning a null
+      return null;
     }
     else if (!connectionDetails.isServer() && httpsMatcher.find())
     {
@@ -99,14 +91,14 @@ public class ProxyDataFilter
         urlMonitor.addSecureLink(client, url);
       } while(httpsMatcher.find());
       
-      String stripped = message.replace("https", " http");
-      return stripped.getBytes("UTF-8");
+      String stripped = message.getBodyAsString().replace("https", " http");
+      message.setBodyBytes(stripped.getBytes("UTF-8"));
     }
     else if (connectionDetails.isServer() && httpMatcher.find())
     {
       UrlMonitor urlMonitor = UrlMonitor.getInstance();
       String client = connectionDetails.getRemoteHost();
-      String response = message;
+      String body = message.getBodyAsString();
       
       // upgrade links
       do 
@@ -114,62 +106,19 @@ public class ProxyDataFilter
         String url = httpMatcher.group();
         if(urlMonitor.isSecureLink(client, url))
         {
-          String secureUrl = url.replaceAll("http", "https");
-          response = response.replaceAll(url, secureUrl);
+          String secureUrl = url.replaceAll(" http", "https");
+          body = body.replaceAll(url, secureUrl);
           System.err.println("-- Upgrade to https: " + secureUrl);
         }
         
       } while(httpsMatcher.find());
       
-      return response.getBytes("UTF-8");
+      message.setBodyBytes(body.getBytes("UTF-8"));
     }
     
-    return null;
+    return message;
   }
   
-  // Old code to print data in hex/ascci
-  private String extractData(byte[] buffer, int bytesRead)
-  {
-    final StringBuffer stringBuffer = new StringBuffer();
-
-    boolean inHex = false;
-
-    for (int i = 0; i < bytesRead; i++)
-    {
-      final int value = (buffer[i] & 0xFF);
-
-      // If it's ASCII, print it as a char.
-      if (value == '\r' || value == '\n'
-          || (value >= ' ' && value <= '~'))
-      {
-        if (inHex)
-        {
-          stringBuffer.append(']');
-          inHex = false;
-        }
-
-        stringBuffer.append((char) value);
-      }
-      else
-      { // else print the value
-        if (!inHex)
-        {
-          stringBuffer.append('[');
-          inHex = true;
-        }
-
-        if (value <= 0xf)
-        { // Where's "HexNumberFormatter?"
-          stringBuffer.append("0");
-        }
-
-        stringBuffer.append(Integer.toHexString(value).toUpperCase());
-      }
-    }
-    
-    return stringBuffer.toString();
-  }
-
   public void connectionOpened(ConnectionDetails connectionDetails)
   {
     System.err.println("--- " + connectionDetails.getDescription()

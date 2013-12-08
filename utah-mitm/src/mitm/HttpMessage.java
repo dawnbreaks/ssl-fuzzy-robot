@@ -4,65 +4,16 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 
 public class HttpMessage
 {
-
-  private Pattern m_httpHeaderPattern;
-  private Pattern m_headerLinePattern;
-  
   private HashMap<String, ArrayList<String>> m_KVStore;
+  private byte[] m_bodyBytes;
   
   public HttpMessage()
   {
     m_KVStore = new HashMap<String, ArrayList<String>>();
-    m_httpHeaderPattern = Pattern.compile("^([A-Z]+.*\r\n\r\n)(.*)", Pattern.DOTALL);
-    m_headerLinePattern = Pattern.compile("^([^:]+):\\s(.+)");
-  }
-  
-  public HttpMessage(byte[] data) throws Exception
-  {
-    this();
-    
-    String dataAsString = new String(data, "UTF-8");
-    Matcher headerMatcher = m_httpHeaderPattern.matcher(dataAsString);
-    
-    if (headerMatcher.find())
-    {
-      String[] headers = headerMatcher.group(1).split("\r\n");
-      for (String headerLine : headers)
-      {
-        if (!m_KVStore.containsKey("Top"))
-        {
-          appendHeader("Top", headerLine);
-        }
-        else
-        {
-          Matcher headerLineMatcher = m_headerLinePattern.matcher(headerLine);
-          
-          if (headerLineMatcher.find())
-          {
-            String header = headerLineMatcher.group(1);
-            String value = headerLineMatcher.group(2);
-            
-            this.appendHeader(header, value);
-          }
-        }
-      }
-      
-      String body = headerMatcher.group(2);
-      if (body.length() > 0)
-      {
-        this.appendHeader("Body", body);
-      }
-    }
-    else
-    {
-      throw new IllegalArgumentException("data does not contain header!");
-    }
+    m_bodyBytes = new byte[0];
   }
   
   public String getHeadersAsString() throws Exception
@@ -72,7 +23,7 @@ public class HttpMessage
     
     for (Entry<String, ArrayList<String>> kv : m_KVStore.entrySet())
     {
-      if (!(kv.getKey().equals("Top") || kv.getKey().equals("Body")))
+      if (!kv.getKey().equals("Top"))
       {
         for (String value : kv.getValue())
         {
@@ -85,9 +36,14 @@ public class HttpMessage
     return sb.toString();
   }
   
-  public String getBodyAsString() 
+  public String getBodyAsString() throws Exception 
   {
-    return containsHeader("Body") ? get("Body").get(0) : "";
+    return new String(m_bodyBytes, "UTF-8");
+  }
+  
+  public void setBodyBytes(byte[] body) 
+  {
+    m_bodyBytes = body;
   }
   
   public String getDataAsString() throws Exception
@@ -97,7 +53,11 @@ public class HttpMessage
   
   public byte[] getData() throws Exception
   {
-    return getDataAsString().getBytes("UTF-8");
+    byte[] headerData = getHeadersAsString().getBytes("UTF-8");
+    byte[] allData = new byte[headerData.length + m_bodyBytes.length];
+    System.arraycopy(headerData, 0, allData, 0, headerData.length);
+    System.arraycopy(m_bodyBytes, 0, allData, headerData.length, m_bodyBytes.length);
+    return allData;
   }
   
   public List<String> get(String header)

@@ -9,6 +9,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.SocketException;
+import mitm.HttpParser.*;
 
 /**
  * Copies bytes from an InputStream to an OutputStream. Uses a ProxyDataFilter
@@ -29,6 +30,8 @@ public class StreamThread implements Runnable
   private OutputStream m_out;
   private ProxyDataFilter m_filter;
   private PrintWriter m_outputWriter;
+  private HttpParser m_httpParser;
+  private OnMessageParsedListener m_parsedListener;
 
   public StreamThread(ConnectionDetails connectionDetails, InputStream in,
       OutputStream out, ProxyDataFilter filter, PrintWriter outputWriter)
@@ -38,6 +41,30 @@ public class StreamThread implements Runnable
     m_out = out;
     m_filter = filter;
     m_outputWriter = outputWriter;
+    m_httpParser = new HttpParser(new OnMessageParsedListener()
+    {
+      @Override
+      public void newMessageParsed(HttpMessage message)
+      {
+        try
+        {
+          final HttpMessage newMessage = m_filter.handle(m_connectionDetails, message);
+  
+          m_outputWriter.flush();
+  
+          if (newMessage != null)
+          {
+            m_out.write(newMessage.getData());
+          }
+          else
+          {
+            m_out.write(new byte[0]);
+          }
+        }
+        catch (SocketException e) {}
+        catch (Exception e) { e.printStackTrace(System.err); }
+      }
+    });
 
     final Thread t = new Thread(this, "Filter thread for "
         + m_connectionDetails.getDescription());
@@ -90,22 +117,10 @@ public class StreamThread implements Runnable
           break;
         }
         
-        // To make things simpler, resize buffer to min size
+        // Resize buffer to min size
         byte[] data = new byte[bytesRead];
         System.arraycopy(buffer, 0, data, 0, bytesRead);
-
-        final byte[] newBytes = m_filter.handle(m_connectionDetails, data);
-
-        m_outputWriter.flush();
-
-        if (newBytes != null)
-        {
-          m_out.write(newBytes);
-        }
-        else
-        {
-          m_out.write(buffer, 0, bytesRead);
-        }
+        m_httpParser.parse(data);
       }
     }
     catch (SocketException e)
@@ -147,4 +162,5 @@ public class StreamThread implements Runnable
     {
     }
   }
+  
 }
