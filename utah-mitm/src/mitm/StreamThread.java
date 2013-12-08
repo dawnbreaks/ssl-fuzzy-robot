@@ -56,10 +56,6 @@ public class StreamThread implements Runnable
           {
             m_out.write(newMessage.getData());
           }
-          else
-          {
-            m_out.write(new byte[0]);
-          }
         }
         catch (SocketException e) {}
         catch (Exception e) { e.printStackTrace(System.err); }

@@ -7,6 +7,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import mitm.ResponseFilter.OnRedirectInterceptListener;
+import mitm.RequestFilter.OnNewRequestListener;
 
 /**
  * ConnectionManager handles forwarding data through the proxy 
@@ -41,11 +42,37 @@ public class ConnectionManager
     m_connectionDetails = connectionDetails;
     m_lastMessage = connectMessage;
     m_outputWriter = outputWriter;
-    m_requestFilter = new RequestFilter();
-    m_responseFilter = new ResponseFilter();
+    m_requestFilter = new RequestFilter(buildOnNewRequestListener());
+    m_responseFilter = new ResponseFilter(buildOnRedirectInterceptListener());
     m_halfSSLsocketFactory = new HalfSSLSocketFactory();
+
+    m_requestFilter.handle(m_connectionDetails, m_lastMessage);
+    System.out.println(m_lastMessage.getDataAsString());
     
-    ((ResponseFilter)m_responseFilter).setOnRedirectInterceptListener(new OnRedirectInterceptListener()
+    CookieCleaner cc = CookieCleaner.getInstance();
+    String method = getRequestMethod(m_lastMessage);
+    String path = getRequestPath(m_lastMessage);
+    
+    if(cc.isClean(method, m_connectionDetails.getLocalHost(), m_connectionDetails.getRemoteHost(), m_lastMessage)) 
+    {
+      // Forward client request to server
+      System.err.println("-- Clean cookies");      
+      m_remoteSocket.getOutputStream().write(m_lastMessage.getData());
+    }
+    else
+    {
+      System.err.println("-- Dirty cookies");
+      HttpMessage redirect = cc.getExpiredCookieRedirectMessage(method, m_connectionDetails.getLocalHost(), m_connectionDetails.getRemoteHost(), m_lastMessage, path);
+      System.out.println(redirect.getDataAsString());
+      m_localSocket.getOutputStream().write(redirect.getData());
+    }
+    
+    launchThreadPair();
+  }
+  
+  private OnRedirectInterceptListener buildOnRedirectInterceptListener()
+  {
+    OnRedirectInterceptListener listener = new OnRedirectInterceptListener()
     {
       @Override
       public void onRedirectIntercepted(HttpMessage response)
@@ -104,44 +131,26 @@ public class ConnectionManager
           e.printStackTrace(System.err);
         }
       }
-    });
+    };
     
-    CookieCleaner cc = CookieCleaner.getInstance();
-    
-    String method = getRequestMethod(m_lastMessage);
-    String path = getRequestPath(m_lastMessage);
-    cleanHeaders(m_lastMessage);
-    
-    System.out.println(m_lastMessage.getDataAsString());
-    
-    if(cc.isClean(method, m_connectionDetails.getLocalHost(), m_connectionDetails.getRemoteHost(), m_lastMessage)) 
-    {
-      // Forward client request to server
-      System.err.println("-- Clean cookies");
-      
-      m_remoteSocket.getOutputStream().write(m_lastMessage.getData());
-    }
-    else
-    {
-      System.err.println("-- Dirty cookies");
-      HttpMessage redirect = cc.getExpiredCookieRedirectMessage(method, m_connectionDetails.getLocalHost(), m_connectionDetails.getRemoteHost(), m_lastMessage, path);
-      System.out.println(redirect.getDataAsString());
-      m_localSocket.getOutputStream().write(redirect.getData());
-    }
-
-//DEBUG
-//    m_remoteSocket.getOutputStream().write(m_lastMessage.getData());
-    
-    launchThreadPair();
+    return listener;
   }
 
-  private void cleanHeaders(HttpMessage request)
+  private OnNewRequestListener buildOnNewRequestListener()
   {
-    request.removeHeader("Accept-Encoding");
-    request.removeHeader("If-Modified-Since");
-    request.removeHeader("Cache-Control");
+    OnNewRequestListener listener = new OnNewRequestListener()
+    {  
+      @Override
+      public void onNewRequest(HttpMessage message)
+      {
+        m_lastMessage = message;
+        
+      }
+    }; 
+    
+    return listener;
   }
-  
+
   private String getRequestMethod(HttpMessage request) 
   {
     // get method of request
