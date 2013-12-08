@@ -28,13 +28,13 @@ public class StreamThread implements Runnable
   private ConnectionDetails m_connectionDetails;
   private InputStream m_in;
   private OutputStream m_out;
-  private ProxyDataFilter m_filter;
+  private IDataFilter m_filter;
   private PrintWriter m_outputWriter;
   private HttpParser m_httpParser;
   private OnMessageParsedListener m_parsedListener;
 
   public StreamThread(ConnectionDetails connectionDetails, InputStream in,
-      OutputStream out, ProxyDataFilter filter, PrintWriter outputWriter)
+      OutputStream out, IDataFilter filter, PrintWriter outputWriter)
   {
     m_connectionDetails = connectionDetails;
     m_in = in;

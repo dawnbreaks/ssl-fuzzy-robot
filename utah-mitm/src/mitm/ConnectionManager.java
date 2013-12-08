@@ -6,7 +6,7 @@ import java.net.Socket;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import mitm.ProxyDataFilter.OnRedirectInterceptListener;
+import mitm.ResponseFilter.OnRedirectInterceptListener;
 
 /**
  * ConnectionManager handles forwarding data through the proxy 
@@ -23,8 +23,8 @@ public class ConnectionManager
   private Socket m_remoteSocket;
   private ConnectionDetails m_connectionDetails;
   private PrintWriter m_outputWriter;
-  private ProxyDataFilter m_requestFilter;
-  private ProxyDataFilter m_responseFilter;
+  private IDataFilter m_requestFilter;
+  private IDataFilter m_responseFilter;
   private HalfSSLSocketFactory m_halfSSLsocketFactory;
   private StreamThread m_clientServerStream;
   private StreamThread m_serverClientStream;
@@ -41,11 +41,11 @@ public class ConnectionManager
     m_connectionDetails = connectionDetails;
     m_lastMessage = connectMessage;
     m_outputWriter = outputWriter;
-    m_requestFilter = new ProxyDataFilter();
-    m_responseFilter = new ProxyDataFilter();
+    m_requestFilter = new RequestFilter();
+    m_responseFilter = new ResponseFilter();
     m_halfSSLsocketFactory = new HalfSSLSocketFactory();
     
-    m_responseFilter.setOnRedirectInterceptListener(new OnRedirectInterceptListener()
+    ((ResponseFilter)m_responseFilter).setOnRedirectInterceptListener(new OnRedirectInterceptListener()
     {
       @Override
       public void onRedirectIntercepted(HttpMessage response)
