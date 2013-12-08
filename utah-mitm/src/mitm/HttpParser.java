@@ -28,7 +28,7 @@ public class HttpParser
     m_buffer = new byte[0];
     
     m_httpHeaderPattern = Pattern.compile("^([A-Z]+.*\r\n\r\n)(.*)", Pattern.DOTALL);
-    m_headerLinePattern = Pattern.compile("^([^:]+):\\s(.+)");
+    m_headerLinePattern = Pattern.compile("^([^:]+):\\s+(.+)");
     m_endChunkedPattern = Pattern.compile("^.*0\r\n\r\n", Pattern.DOTALL);
   }
   
