@@ -111,6 +111,10 @@ public class HttpParser
         Matcher endChunkedMatcher = m_endChunkedPattern.matcher(bodyAsString);
         if (endChunkedMatcher.find())
         {
+          if (m_buffer.length != endChunkedMatcher.group().getBytes("UTF-8").length) 
+          {
+            throw new IllegalStateException("Not sure about this...");
+          }
           m_partialMessage.setBodyBytes(m_buffer);
           m_buffer = new byte[0];
           m_haveFullHeader = false;

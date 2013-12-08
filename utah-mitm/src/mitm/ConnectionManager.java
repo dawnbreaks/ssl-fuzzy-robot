@@ -46,7 +46,7 @@ public class ConnectionManager
     m_responseFilter = new ResponseFilter(buildOnRedirectInterceptListener());
     m_halfSSLsocketFactory = new HalfSSLSocketFactory();
 
-    m_requestFilter.handle(m_connectionDetails, m_lastMessage);
+    m_lastMessage = m_requestFilter.handle(m_connectionDetails, m_lastMessage);
     System.out.println(m_lastMessage.getDataAsString());
     
     CookieCleaner cc = CookieCleaner.getInstance();
@@ -215,9 +215,7 @@ public class ConnectionManager
           m_connectionDetails.getLocalHost(),
           m_connectionDetails.getLocalPort(),
           m_connectionDetails.getRemoteHost(),
-          m_connectionDetails.getRemotePort(),
-          m_connectionDetails.isSecure(),
-          m_connectionDetails.isServer()),
+          m_connectionDetails.getRemotePort()),
         m_localSocket.getInputStream(),
         m_remoteSocket.getOutputStream(),
         m_requestFilter,
@@ -228,9 +226,7 @@ public class ConnectionManager
           m_connectionDetails.getRemoteHost(),
           m_connectionDetails.getRemotePort(),
           m_connectionDetails.getLocalHost(),
-          m_connectionDetails.getLocalPort(),
-          m_connectionDetails.isSecure(),
-          !m_connectionDetails.isServer()),
+          m_connectionDetails.getLocalPort()),
         m_remoteSocket.getInputStream(),
         m_localSocket.getOutputStream(),
         m_responseFilter,

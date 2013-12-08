@@ -19,41 +19,26 @@ public class ConnectionDetails
   private int m_localPort;
   private String m_remoteHost;
   private int m_remotePort;
-  private boolean m_isSecure;
-  private boolean m_isServer;
 
   /**
    * Creates a new ConnectionDetails instance.
    */
   public ConnectionDetails(String localHost, int localPort,
-      String remoteHost, int remotePort, boolean isSecure,
-      boolean isServer)
+      String remoteHost, int remotePort)
   {
     m_localHost = localHost.toLowerCase();
     m_localPort = localPort;
     m_remoteHost = remoteHost.toLowerCase();
     m_remotePort = remotePort;
-    m_isSecure = isSecure;
-    m_isSecure = isServer;
 
     m_hashCode = m_localHost.hashCode() ^ m_remoteHost.hashCode()
-        ^ m_localPort ^ m_remotePort ^ (m_isSecure ? 0x55555555 : 0);
+        ^ m_localPort ^ m_remotePort;
   }
 
   public String getDescription()
   {
     return m_localHost + ":" + m_localPort + "->" + m_remoteHost + ":"
         + m_remotePort;
-  }
-
-  public boolean isSecure()
-  {
-    return m_isSecure;
-  }
-  
-  public boolean isServer()
-  {
-    return m_isServer;
   }
 
   public String getRemoteHost()
@@ -101,7 +86,6 @@ public class ConnectionDetails
     return hashCode() == otherConnectionDetails.hashCode()
         && getLocalPort() == otherConnectionDetails.getLocalPort()
         && getRemotePort() == otherConnectionDetails.getRemotePort()
-        && isSecure() == otherConnectionDetails.isSecure()
         && getLocalHost().equals(otherConnectionDetails.getLocalHost())
         && getRemoteHost().equals(
             otherConnectionDetails.getRemoteHost());

@@ -21,7 +21,7 @@ public class ResponseFilter implements IDataFilter
   public ResponseFilter(OnRedirectInterceptListener listener)
   {
     m_redirectListener = listener;
-    m_serverRedirectPattern = Pattern.compile("^HTTP.* (30\\d.*)");
+    m_serverRedirectPattern = Pattern.compile("^HTTP.* (30\\d).*");
     m_httpsPattern = Pattern.compile("(https://[^\\s]+)");
   }
   
@@ -51,16 +51,23 @@ public class ResponseFilter implements IDataFilter
     if (redirectMatcher.find())
     {
       // Intercept redirects
-      System.err.println("-- Intecepted redirect: "
-          + redirectMatcher.group(1) + " for " + message.get("Location").get(0));
+      int statusCode = Integer.parseInt(redirectMatcher.group(1));
       
-      if (m_redirectListener != null)
+      if (statusCode == 301 || statusCode == 302)
       {
-        m_redirectListener.onRedirectIntercepted(message);
+        String location = message.get("Location").get(0);
+        
+        if (location.startsWith("https"))
+        { 
+          System.err.println("-- Intecepted redirect: "
+              + redirectMatcher.group() + " for " + location);
+          
+          m_redirectListener.onRedirectIntercepted(message);
+    
+          // Avoid closing the client connection by returning a null
+          return null;
+        }
       }
-
-      // Avoid closing the client connection by returning a null
-      return null;
     }
     
     UrlMonitor urlMonitor = UrlMonitor.getInstance();

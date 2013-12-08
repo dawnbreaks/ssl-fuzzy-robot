@@ -91,7 +91,7 @@ public class ProxyEngine implements Runnable
                 new ConnectionManager(
                     localSocket, 
                     remoteSocket, 
-                    new ConnectionDetails(m_localHost, m_localPort, remoteHost, remotePort, false, false), 
+                    new ConnectionDetails(m_localHost, m_localPort, remoteHost, remotePort), 
                     message,
                     m_outputWriter);
               }

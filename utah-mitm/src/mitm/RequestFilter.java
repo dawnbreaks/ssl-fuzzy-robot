@@ -12,7 +12,8 @@ public class RequestFilter implements IDataFilter
     public void onNewRequest(HttpMessage message);
   }
   
-  public RequestFilter(OnNewRequestListener l) {
+  public RequestFilter(OnNewRequestListener l) 
+  {
     m_newRequestListener = l;
   }
   
