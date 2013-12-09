@@ -34,10 +34,12 @@ public class HttpParser
   
   public void parse(byte[] data) throws Exception
   {
+    //System.err.println("--- called parse for data len=" + data.length);
     addToBuffer(data);
     
     if (parseData())
     {
+      //System.err.println("--- successful parse");
       HttpMessage m = m_partialMessage;
       m_partialMessage = new HttpMessage();
       m_parseListener.newMessageParsed(m);
@@ -111,10 +113,12 @@ public class HttpParser
         Matcher endChunkedMatcher = m_endChunkedPattern.matcher(bodyAsString);
         if (endChunkedMatcher.find())
         {
+          /*
           if (m_buffer.length != endChunkedMatcher.group().getBytes("UTF-8").length) 
           {
             throw new IllegalStateException("Not sure about this...");
           }
+          */
           m_partialMessage.setBodyBytes(m_buffer);
           m_buffer = new byte[0];
           m_haveFullHeader = false;
@@ -130,7 +134,10 @@ public class HttpParser
       }
       else
       {
-        throw new IllegalStateException("How to parse now??\r\n" + m_partialMessage.getDataAsString());
+        // Hmm.. we have extra data, but it's not for this message
+        // Return true but don't clear the buffer
+        m_haveFullHeader = false;
+        return true;
       }
     }
     
@@ -139,32 +146,27 @@ public class HttpParser
   
   private Integer getContentLength()
   {
-    String headerName = "Content-Length";
-    if (!m_partialMessage.containsHeader(headerName))
-    {
-      headerName = headerName.toLowerCase();
-      if (!m_partialMessage.containsHeader(headerName))
-      {
-        return null;
-      }
-    }
-    return Integer.parseInt(m_partialMessage.get(headerName).get(0));
+    String headerName = findWorkingCase("Content-Length", "Content-length", "content-length");
+    return headerName == null ? null : Integer.parseInt(m_partialMessage.get(headerName).get(0));
   }
   
   private boolean isChunkEncoded()
   {
-    String headerName = "Transfer-Encoding";
-    if (!m_partialMessage.containsHeader(headerName))
-    {
-      headerName = headerName.toLowerCase();
-      if (!m_partialMessage.containsHeader(headerName))
-      {
-        return false;
-      }
-    }
-    
+    String headerName = findWorkingCase("Transfer-Encoding", "Transfer-encoding", "transfer-encoding");
     return m_partialMessage.containsHeader(headerName) &&
            m_partialMessage.get(headerName).get(0).equalsIgnoreCase("chunked");
+  }
+  
+  private String findWorkingCase(String... headerNames)
+  {
+    for (String s : headerNames)
+    {
+      if (m_partialMessage.containsHeader(s))
+      {
+        return s;
+      }
+    }
+    return null;
   }
   
   private void addToBuffer(byte[] data)
