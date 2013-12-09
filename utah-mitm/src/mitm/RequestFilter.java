@@ -19,31 +19,41 @@ public class RequestFilter implements IDataFilter
   
   @Override
   public HttpMessage handle(ConnectionDetails connectionDetails, HttpMessage message) throws Exception
-  {
-    Pattern httpPattern = Pattern.compile("(http://[^\\s]+)");
-    Matcher httpMatcher = httpPattern.matcher(message.getBodyAsString());
+  {    
+    Pattern httpPattern = Pattern.compile("(http://[\\w\\d:#@%/;$()~_?\\+-=\\\\.&]*)", Pattern.CASE_INSENSITIVE);
     
     cleanHeaders(message);
     
-    System.err.println("------ " + connectionDetails.getDescription() + " ------");
-    System.out.println(message.getHeadersAsString());
+    String topLine = message.getTopLine();
     
-    UrlMonitor urlMonitor = UrlMonitor.getInstance();
-    String client = connectionDetails.getRemoteHost();
-    String body = message.getBodyAsString();
-        
-    while (httpMatcher.find())
+    if (topLine.startsWith("POST"))
     {
-      String url = httpMatcher.group();
-      
-      if(urlMonitor.isSecureLink(client, url))
+      topLine = topLine.replaceFirst("http", "https");
+    }
+    else
+    {
+      UrlMonitor urlMonitor = UrlMonitor.getInstance();
+      Matcher httpMatcher = httpPattern.matcher(topLine);
+      while (httpMatcher.find())
       {
-        String secureUrl = url.replaceAll(" http", "https");
-        body = body.replaceAll(url, secureUrl);
-        System.err.println("-- Upgrade to https: " + secureUrl);
+        String url = httpMatcher.group();
+        
+        if(urlMonitor.isSecureLink(connectionDetails.getRemoteHost(), url))
+        {
+          String secureUrl = url.replaceAll("http", "https");
+          topLine = topLine.replaceAll(url, secureUrl);
+          System.err.println("-- Upgrade to https: " + secureUrl);
+        }
       }
-      
-      message.setBodyBytes(body.getBytes("UTF-8"));
+    }
+    message.replaceHeader("Top", topLine);
+    
+    System.err.println("------ " + connectionDetails.getDescription() + " ------");
+    System.out.println(message.getHeadersAsString());    
+    
+    if (message.getTopLine().startsWith("POST"))
+    {
+      System.out.println(message.getBodyAsString());
     }
     
     m_newRequestListener.onNewRequest(message);

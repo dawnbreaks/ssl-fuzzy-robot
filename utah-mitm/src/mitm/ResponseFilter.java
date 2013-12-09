@@ -16,13 +16,15 @@ public class ResponseFilter implements IDataFilter
   private PrintWriter m_out = new PrintWriter(System.out, true);
   private Pattern m_serverRedirectPattern;
   private Pattern m_httpsPattern;
+  private Pattern m_jsCheckPattern;
   private OnRedirectInterceptListener m_redirectListener;
 
   public ResponseFilter(OnRedirectInterceptListener listener)
   {
     m_redirectListener = listener;
     m_serverRedirectPattern = Pattern.compile("^HTTP.* (30\\d).*");
-    m_httpsPattern = Pattern.compile("(https://[^\\s]+)");
+    m_httpsPattern = Pattern.compile("(https://[\\w\\d:#@%/;$()~_?\\+-=\\.&\\\\]*)", Pattern.CASE_INSENSITIVE);
+    m_jsCheckPattern = Pattern.compile("location[.]protocol");
   }
   
   public void setOutputPrintWriter(PrintWriter outputPrintWriter)
@@ -53,7 +55,7 @@ public class ResponseFilter implements IDataFilter
       // Intercept redirects
       int statusCode = Integer.parseInt(redirectMatcher.group(1));
       
-      if (statusCode == 301 || statusCode == 302)
+      if ((statusCode == 301 || statusCode == 302) && message.containsHeader("Location"))
       {
         String location = message.get("Location").get(0);
         
@@ -68,6 +70,15 @@ public class ResponseFilter implements IDataFilter
           return null;
         }
       }
+    }
+    
+    String body = message.getBodyAsString();
+    Matcher jsMatcher = m_jsCheckPattern.matcher(body);
+    if (jsMatcher.find())
+    {
+      // break javascript protocol check
+      body = body.replace("location.protocol", "location_protocol");
+      message.setBodyBytes(body.getBytes("UTF-8"));
     }
     
     UrlMonitor urlMonitor = UrlMonitor.getInstance();
