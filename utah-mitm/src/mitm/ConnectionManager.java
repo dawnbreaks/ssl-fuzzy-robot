@@ -86,45 +86,49 @@ public class ConnectionManager
         
         try
         {
-          
-          modifyHeaderFromRedirect(m_lastMessage, response);
+                    
           HttpMessage request = m_lastMessage;
+          
           
           if(!getRequestMethod(m_lastMessage).equals("GET"))
           {
-            request = new HttpMessage();
-            request.appendHeader("Top", "GET " + response.get("Location").get(0) + " HTTP/1.1");
-            request.appendHeader("Host", m_lastMessage.get("Host").get(0));
-            request.appendHeader("Accept-Language", m_lastMessage.get("Accept-Language").get(0));
-            request.appendHeader("User-Agent", m_lastMessage.get("User-Agent").get(0));
-            request.appendHeader("Accept", m_lastMessage.get("Accept").get(0));
-            request.appendHeader("Proxy-Connection", m_lastMessage.get("Proxy-Connection").get(0));
-            request.appendHeader("Referer", response.get("Location").get(0));
-            
-            String cookies = "";
-            for(int i = 0; i < response.get("Set-Cookie").size(); i++)
-            {
-              String cookie = response.get("Set-Cookie").get(i).split(";")[0];
-              if(!cookie.contains("deleted")) 
-              {
-                cookies += cookie;
-               
-                if(i+1 < response.get("Set-Cookie").size()) {
-                  cookies += "; ";
-                }
-              }        
-            }
-            
-            request.appendHeader("Cookie", cookies);
+//            request = new HttpMessage();
+//            request.appendHeader("Top", "GET " + response.get("Location").get(0) + " HTTP/1.1");
+//            request.appendHeader("Host", m_lastMessage.get("Host").get(0));
+//            request.appendHeader("Accept-Language", m_lastMessage.get("Accept-Language").get(0));
+//            request.appendHeader("User-Agent", m_lastMessage.get("User-Agent").get(0));
+//            request.appendHeader("Accept", m_lastMessage.get("Accept").get(0));
+//            request.appendHeader("Proxy-Connection", m_lastMessage.get("Proxy-Connection").get(0));
+//            request.appendHeader("Referer", response.get("Location").get(0));
+//            
+//            String cookies = "";
+//            for(int i = 0; i < response.get("Set-Cookie").size(); i++)
+//            {
+//              String cookie = response.get("Set-Cookie").get(i).split(";")[0];
+//              if(!cookie.contains("deleted")) 
+//              {
+//                cookies += cookie;
+//               
+//                if(i+1 < response.get("Set-Cookie").size()) {
+//                  cookies += "; ";
+//                }
+//              }        
+//            }
+//            
+//            request.appendHeader("Cookie", cookies);
+            m_localSocket.getOutputStream().write(response.getData());
           }
-          
-          System.out.println(request.getDataAsString());
-          
-          // Promote our outgoing stream to SSL
-          m_remoteSocket = m_halfSSLsocketFactory.createClientSocket(m_connectionDetails.getRemoteHost(), 443); 
-          m_clientServerStream.changeOutputStream(m_remoteSocket.getOutputStream());
-          m_serverClientStream.changeInputStream(m_remoteSocket.getInputStream());         
-          m_remoteSocket.getOutputStream().write(request.getData());
+          else 
+          {
+            modifyHeaderFromRedirect(request, response);            
+            System.out.println(request.getDataAsString());
+            
+            // Promote our outgoing stream to SSL
+            m_remoteSocket = m_halfSSLsocketFactory.createClientSocket(m_connectionDetails.getRemoteHost(), 443); 
+            m_clientServerStream.changeOutputStream(m_remoteSocket.getOutputStream());
+            m_serverClientStream.changeInputStream(m_remoteSocket.getInputStream());         
+            m_remoteSocket.getOutputStream().write(request.getData());
+          }
         }
         catch (Exception e)
         {
@@ -180,7 +184,6 @@ public class ConnectionManager
   {
     setRedirectUri(request, response);
     Strippers.removeAcceptEncoding(request);
-//    request = response.replaceAll("https", "http");
   }
 
   private void setRedirectUri(HttpMessage request, HttpMessage response)
